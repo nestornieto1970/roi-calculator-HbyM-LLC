@@ -73,10 +73,12 @@ function TextField({ label, value, onChange, placeholder = "" }) {
   );
 }
 
+const emptyWhatsApp = () => ({ show: false, prop: null, type: null, message: "" });
+
 const emptyForm = () => ({
   purchasePrice: 250000, remodelCost: 20000, hoaMonthly: 242,
   insuranceAnnual: 1200, propertyTax: 1400, rentMonthly: 1600,
-  saleValue: 0, listingUrl: "",
+  saleValue: "", listingUrl: "",
   propName: "", condo: "", realtorName: "", realtorPhone: "", realtorEmail: "",
 });
 
@@ -87,6 +89,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [wa, setWa] = useState(emptyWhatsApp());
 
   const [form, setForm] = useState(emptyForm());
   const { purchasePrice, remodelCost, hoaMonthly, insuranceAnnual, propertyTax, rentMonthly, saleValue, listingUrl, propName, condo, realtorName, realtorPhone, realtorEmail } = form;
@@ -103,11 +106,6 @@ export default function App() {
   const roiColor = roi >= TARGET ? "#16A34A" : roi >= 6 ? "#D97706" : "#DC2626";
   const barPct = Math.min(Math.max((roi / 12) * 100, 0), 100);
 
-  // Plusvalía
-  const appreciation = saleValue > 0 ? saleValue - purchasePrice : 0;
-  const appreciationPct = purchasePrice > 0 && saleValue > 0 ? (appreciation / purchasePrice) * 100 : 0;
-  const appreciationColor = appreciation >= 0 ? "#16A34A" : "#DC2626";
-
   const showToast = (msg, ok = true) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
 
   const loadProperties = async () => {
@@ -122,7 +120,7 @@ export default function App() {
     prop_name: propName, condo, realtor_name: realtorName, realtor_phone: realtorPhone, realtor_email: realtorEmail,
     purchase_price: purchasePrice, remodel_cost: remodelCost, hoa_monthly: hoaMonthly,
     insurance_annual: insuranceAnnual, property_tax: propertyTax, rent_monthly: rentMonthly,
-    sale_value: saleValue || null, listing_url: listingUrl || null,
+    sale_value: saleValue ? Number(saleValue) : null, listing_url: listingUrl || null,
     roi: parseFloat(roi.toFixed(2)), net_annual: netAnnual,
   });
 
@@ -136,7 +134,7 @@ export default function App() {
         setEditingId(null);
       } else {
         await supabase.insert(buildRecord());
-        showToast("✅ Propiedad guardada en Supabase.");
+        showToast("✅ Propiedad guardada.");
       }
       setForm(emptyForm());
       await loadProperties();
@@ -148,7 +146,7 @@ export default function App() {
     setForm({
       purchasePrice: p.purchase_price, remodelCost: p.remodel_cost, hoaMonthly: p.hoa_monthly,
       insuranceAnnual: p.insurance_annual, propertyTax: p.property_tax, rentMonthly: p.rent_monthly,
-      saleValue: p.sale_value || 0, listingUrl: p.listing_url || "",
+      saleValue: p.sale_value || "", listingUrl: p.listing_url || "",
       propName: p.prop_name || "", condo: p.condo || "", realtorName: p.realtor_name || "",
       realtorPhone: p.realtor_phone || "", realtorEmail: p.realtor_email || "",
     });
@@ -164,9 +162,31 @@ export default function App() {
     catch { showToast("Error eliminando", false); }
   };
 
+  const openWhatsApp = (p) => setWa({ show: true, prop: p, type: null, message: "" });
+
+  const selectWaType = (type) => {
+    const p = wa.prop;
+    const name = p.realtor_name || "Estimado/a";
+    const price = fmt(p.purchase_price);
+    const propNameText = p.prop_name ? `"${p.prop_name}"` : "la propiedad";
+    const msg = type === "offer"
+      ? `Saludos ${name}, después de nuestros análisis de inversión y reparaciones, estamos muy interesados en la propiedad ${propNameText} y queremos hacer una oferta de compra por el valor de ${price}. Esta oferta será válida por 48 horas.`
+      : `Saludos ${name}, después de nuestros análisis de inversión y reparaciones, declinamos hacer una oferta de compra de la propiedad ${propNameText}.`;
+    setWa(prev => ({ ...prev, type, message: msg }));
+  };
+
+  const sendWhatsApp = () => {
+    const phone = (wa.prop.realtor_phone || "").replace(/\D/g, "");
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(wa.message)}`
+      : `https://wa.me/?text=${encodeURIComponent(wa.message)}`;
+    window.open(url, "_blank");
+    setWa(emptyWhatsApp());
+  };
+
   const exportCSV = () => {
     if (!savedProps.length) return showToast("No hay propiedades guardadas.", false);
-    const h = ["Nombre","Condominio","Realtor","Teléfono","Email","Precio Compra","Remodelación","HOA Mensual","Seguro Anual","Property Tax","Renta Mensual","Valor de Venta","Link","ROI %","Neto Anual","Fecha"];
+    const h = ["Nombre","Condominio","Realtor","Teléfono","Email","Precio Compra","Remodelación","HOA Mensual","Seguro Anual","Property Tax","Renta Mensual","Precio Venta","Link","ROI %","Neto Anual","Fecha"];
     const rows = savedProps.map(p => [p.prop_name,p.condo,p.realtor_name,p.realtor_phone,p.realtor_email,p.purchase_price,p.remodel_cost,p.hoa_monthly,p.insurance_annual,p.property_tax,p.rent_monthly,p.sale_value,p.listing_url,p.roi,p.net_annual,new Date(p.created_at).toLocaleDateString("es-PR")]);
     const csv = [h,...rows].map(r => r.map(v => `"${v??""}"` ).join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "propiedades_roi.csv"; a.click();
@@ -184,6 +204,44 @@ export default function App() {
       {toast && (
         <div style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", background: toast.ok ? "#16A34A" : "#DC2626", color: "#fff", padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: "700", zIndex: 999, boxShadow: "0 4px 12px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      {wa.show && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-end" }}>
+          <div style={{ background: "#fff", width: "100%", borderRadius: "20px 20px 0 0", padding: "24px 20px", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#1A1A2E", marginBottom: "6px" }}>📲 Enviar mensaje por WhatsApp</div>
+            <div style={{ fontSize: "13px", color: "#6B7280", marginBottom: "20px" }}>{wa.prop.prop_name || "Propiedad"} — {wa.prop.realtor_name || "Realtor"}</div>
+
+            {!wa.type ? (
+              <>
+                <div style={{ fontSize: "12px", fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Selecciona el tipo de mensaje:</div>
+                <button onClick={() => selectWaType("offer")} style={{ width: "100%", padding: "16px", background: "#F0FDF4", border: "2px solid #86EFAC", borderRadius: "12px", color: "#16A34A", fontSize: "15px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", marginBottom: "10px", textAlign: "left" }}>
+                  ✅ Ofertar
+                  <div style={{ fontSize: "12px", fontWeight: "400", color: "#6B7280", marginTop: "4px" }}>Enviar oferta de compra por {fmt(wa.prop.purchase_price)}</div>
+                </button>
+                <button onClick={() => selectWaType("decline")} style={{ width: "100%", padding: "16px", background: "#FEF2F2", border: "2px solid #FCA5A5", borderRadius: "12px", color: "#DC2626", fontSize: "15px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", marginBottom: "10px", textAlign: "left" }}>
+                  ❌ Declinar
+                  <div style={{ fontSize: "12px", fontWeight: "400", color: "#6B7280", marginTop: "4px" }}>Informar que no haremos oferta</div>
+                </button>
+                <button onClick={() => setWa(emptyWhatsApp())} style={{ width: "100%", padding: "13px", background: "transparent", border: "1px solid #E5E7EB", borderRadius: "12px", color: "#6B7280", fontSize: "14px", cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: "12px", fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Revisa el mensaje:</div>
+                <textarea
+                  value={wa.message}
+                  onChange={(e) => setWa(prev => ({ ...prev, message: e.target.value }))}
+                  style={{ width: "100%", minHeight: "140px", padding: "12px", border: "1.5px solid #E0E4EA", borderRadius: "12px", fontSize: "14px", color: "#1A1A2E", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }}
+                />
+                <button onClick={sendWhatsApp} style={{ width: "100%", padding: "16px", background: "#25D366", border: "none", borderRadius: "12px", color: "#fff", fontSize: "15px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", marginTop: "10px", marginBottom: "8px" }}>
+                  📲 Enviar por WhatsApp
+                </button>
+                <button onClick={() => setWa(prev => ({ ...prev, type: null, message: "" }))} style={{ width: "100%", padding: "13px", background: "transparent", border: "1px solid #E5E7EB", borderRadius: "12px", color: "#6B7280", fontSize: "14px", cursor: "pointer", fontFamily: "inherit" }}>← Volver</button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -259,24 +317,6 @@ export default function App() {
             <SliderField label="Property Tax" value={propertyTax} onChange={set("propertyTax")} min={0} max={15000} step={100} />
           </div>
 
-          {/* Plusvalía */}
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "18px 16px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-            <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>📈 Plusvalía</div>
-            <SliderField label="Valor de Venta" value={saleValue} onChange={set("saleValue")} min={0} max={2000000} step={5000} />
-            {saleValue > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
-                <div style={{ background: appreciation >= 0 ? "#F0FDF4" : "#FEF2F2", borderRadius: "10px", padding: "10px 12px" }}>
-                  <div style={{ fontSize: "10px", color: appreciationColor, fontWeight: "700", marginBottom: "2px" }}>Ganancia / Pérdida</div>
-                  <div style={{ fontSize: "15px", fontWeight: "700", color: appreciationColor, fontFamily: "monospace" }}>{appreciation >= 0 ? "+" : ""}{fmt(appreciation)}</div>
-                </div>
-                <div style={{ background: appreciation >= 0 ? "#F0FDF4" : "#FEF2F2", borderRadius: "10px", padding: "10px 12px" }}>
-                  <div style={{ fontSize: "10px", color: appreciationColor, fontWeight: "700", marginBottom: "2px" }}>% sobre compra</div>
-                  <div style={{ fontSize: "15px", fontWeight: "700", color: appreciationColor, fontFamily: "monospace" }}>{appreciation >= 0 ? "+" : ""}{fmtPct(appreciationPct)}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Resumen */}
           <div style={{ background: "#fff", borderRadius: "16px", padding: "16px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "10px" }}>📊 Resumen</div>
@@ -286,7 +326,6 @@ export default function App() {
               ["Gastos Anuales", fmt(annualExpenses), "#DC2626"],
               ["Neto Anual", fmt(netAnnual), netAnnual >= 0 ? "#16A34A" : "#DC2626"],
               ["ROI Anual", fmtPct(roi), roiColor],
-              ...(saleValue > 0 ? [["Plusvalía", (appreciation >= 0 ? "+" : "") + fmt(appreciation) + " (" + fmtPct(appreciationPct) + ")", appreciationColor]] : []),
             ].map(([l,v,c]) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #F3F4F6" }}>
                 <span style={{ fontSize: "13px", color: "#6B7280" }}>{l}</span>
@@ -301,6 +340,7 @@ export default function App() {
             <TextField label="Nombre" value={propName} onChange={set("propName")} placeholder="Ej. Apt 3B Condado" />
             <TextField label="Condominio" value={condo} onChange={set("condo")} placeholder="Nombre del complejo" />
             <TextField label="Link anuncio" value={listingUrl} onChange={set("listingUrl")} placeholder="https://..." />
+            <TextField label="Precio de Venta" value={saleValue} onChange={set("saleValue")} placeholder="Ej. 280000" />
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", margin: "14px 0 6px" }}>👤 Realtor</div>
             <TextField label="Nombre" value={realtorName} onChange={set("realtorName")} placeholder="Nombre completo" />
             <TextField label="Teléfono" value={realtorPhone} onChange={set("realtorPhone")} placeholder="787-000-0000" />
@@ -310,8 +350,17 @@ export default function App() {
           <button onClick={save} disabled={saving} style={{
             width: "100%", padding: "16px", background: saving ? "#93C5FD" : editingId ? "#D97706" : "#1D4ED8", border: "none",
             borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: "700",
-            cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit",
+            cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", marginBottom: "12px",
           }}>{saving ? "⏳ Guardando..." : editingId ? "✏️ Actualizar Propiedad" : "💾 Guardar en Supabase"}</button>
+
+          {/* WhatsApp button on calculator */}
+          {realtorPhone && (
+            <button onClick={() => openWhatsApp({ realtor_name: realtorName, realtor_phone: realtorPhone, purchase_price: purchasePrice, prop_name: propName })} style={{
+              width: "100%", padding: "16px", background: "#25D366", border: "none",
+              borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: "700",
+              cursor: "pointer", fontFamily: "inherit",
+            }}>📲 Enviar Oferta por WhatsApp</button>
+          )}
         </div>
       )}
 
@@ -334,7 +383,6 @@ export default function App() {
               </button>
               {savedProps.map((p) => {
                 const c = Number(p.roi) >= TARGET ? "#16A34A" : Number(p.roi) >= 6 ? "#D97706" : "#DC2626";
-                const appr = p.sale_value && p.purchase_price ? p.sale_value - p.purchase_price : null;
                 return (
                   <div key={p.id} style={{ background: "#fff", borderRadius: "14px", padding: "16px", marginBottom: "12px", boxShadow: "0 1px 6px rgba(0,0,0,0.07)", borderLeft: `4px solid ${c}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -355,7 +403,7 @@ export default function App() {
                         ["Compra", fmt(p.purchase_price)],
                         ["Renta", fmt(p.rent_monthly)+"/mo"],
                         ["Neto", fmt(p.net_annual)+"/yr"],
-                        ...(p.sale_value ? [["Venta", fmt(p.sale_value)], ["Plusvalía", (appr >= 0 ? "+" : "") + fmt(appr)]] : []),
+                        ...(p.sale_value ? [["Precio Venta", fmt(p.sale_value)]] : []),
                       ].map(([l,v]) => (
                         <div key={l} style={{ background: "#F8F9FB", borderRadius: "8px", padding: "8px" }}>
                           <div style={{ fontSize: "9px", color: "#9CA3AF", textTransform: "uppercase", fontWeight: "700" }}>{l}</div>
@@ -365,6 +413,7 @@ export default function App() {
                     </div>
                     <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                       <button onClick={() => startEdit(p)} style={{ flex: 1, padding: "7px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px", color: "#1D4ED8", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", fontWeight: "700" }}>✏️ Editar</button>
+                      <button onClick={() => openWhatsApp(p)} style={{ flex: 1, padding: "7px", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: "8px", color: "#16A34A", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", fontWeight: "700" }}>📲 WhatsApp</button>
                       <button onClick={() => del(p.id)} style={{ flex: 1, padding: "7px", background: "transparent", border: "1px solid #FCA5A5", borderRadius: "8px", color: "#DC2626", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>🗑 Eliminar</button>
                     </div>
                   </div>

@@ -7,12 +7,16 @@ const supabase = {
   async insert(record) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/properties`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-        "Prefer": "return=representation",
-      },
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=representation" },
+      body: JSON.stringify(record),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  async update(id, record) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/properties?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=representation" },
       body: JSON.stringify(record),
     });
     if (!res.ok) throw new Error(await res.text());
@@ -20,10 +24,7 @@ const supabase = {
   },
   async fetchAll() {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/properties?order=created_at.desc`, {
-      headers: {
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-      },
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -31,10 +32,7 @@ const supabase = {
   async remove(id) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/properties?id=eq.${id}`, {
       method: "DELETE",
-      headers: {
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-      },
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
     });
     if (!res.ok) throw new Error(await res.text());
   },
@@ -49,18 +47,13 @@ function SliderField({ label, value, onChange, min, max, step = 100, prefix = "$
     <div style={{ padding: "14px 0", borderBottom: "1px solid #F0F2F5" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "13px", color: "#555", fontWeight: "600" }}>{label}</span>
-        <span style={{ fontSize: "15px", fontWeight: "700", color: "#1A1A2E", fontFamily: "monospace" }}>
-          {prefix}{Number(value).toLocaleString("en-US")}{suffix}
-        </span>
+        <span style={{ fontSize: "15px", fontWeight: "700", color: "#1A1A2E", fontFamily: "monospace" }}>{prefix}{Number(value).toLocaleString("en-US")}{suffix}</span>
       </div>
       <div style={{ position: "relative", height: "36px", display: "flex", alignItems: "center" }}>
         <div style={{ position: "absolute", left: 0, right: 0, height: "6px", background: "#E8ECF0", borderRadius: "3px" }} />
         <div style={{ position: "absolute", left: 0, width: `${pct}%`, height: "6px", background: "linear-gradient(90deg, #3B82F6, #1D4ED8)", borderRadius: "3px" }} />
-        <input
-          type="range" min={min} max={max} step={step} value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          style={{ position: "absolute", left: 0, right: 0, width: "100%", appearance: "none", WebkitAppearance: "none", background: "transparent", height: "36px", cursor: "pointer", margin: 0 }}
-        />
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))}
+          style={{ position: "absolute", left: 0, right: 0, width: "100%", appearance: "none", WebkitAppearance: "none", background: "transparent", height: "36px", cursor: "pointer", margin: 0 }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
         <span style={{ fontSize: "10px", color: "#AAB0BB" }}>{prefix}{Number(min).toLocaleString("en-US")}</span>
@@ -74,13 +67,18 @@ function TextField({ label, value, onChange, placeholder = "" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #F0F2F5" }}>
       <span style={{ fontSize: "13px", color: "#555", fontWeight: "600", width: "130px", flexShrink: 0 }}>{label}</span>
-      <input
-        value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        style={{ flex: 1, border: "none", borderBottom: "1.5px solid #E0E4EA", background: "transparent", fontSize: "14px", color: "#1A1A2E", padding: "4px 0", outline: "none", fontFamily: "inherit" }}
-      />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        style={{ flex: 1, border: "none", borderBottom: "1.5px solid #E0E4EA", background: "transparent", fontSize: "14px", color: "#1A1A2E", padding: "4px 0", outline: "none", fontFamily: "inherit" }} />
     </div>
   );
 }
+
+const emptyForm = () => ({
+  purchasePrice: 250000, remodelCost: 20000, hoaMonthly: 242,
+  insuranceAnnual: 1200, propertyTax: 1400, rentMonthly: 1600,
+  saleValue: 0, listingUrl: "",
+  propName: "", condo: "", realtorName: "", realtorPhone: "", realtorEmail: "",
+});
 
 export default function App() {
   const [tab, setTab] = useState("calc");
@@ -88,18 +86,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
-  const [purchasePrice, setPurchasePrice] = useState(250000);
-  const [remodelCost, setRemodelCost] = useState(20000);
-  const [hoaMonthly, setHoaMonthly] = useState(242);
-  const [insuranceAnnual, setInsuranceAnnual] = useState(1200);
-  const [propertyTax, setPropertyTax] = useState(1400);
-  const [rentMonthly, setRentMonthly] = useState(1600);
-  const [propName, setPropName] = useState("");
-  const [condo, setCondo] = useState("");
-  const [realtorName, setRealtorName] = useState("");
-  const [realtorPhone, setRealtorPhone] = useState("");
-  const [realtorEmail, setRealtorEmail] = useState("");
+  const [form, setForm] = useState(emptyForm());
+  const { purchasePrice, remodelCost, hoaMonthly, insuranceAnnual, propertyTax, rentMonthly, saleValue, listingUrl, propName, condo, realtorName, realtorPhone, realtorEmail } = form;
+  const set = (key) => (val) => setForm(f => ({ ...f, [key]: val }));
 
   const TARGET = 8;
   const totalInvestment = purchasePrice + remodelCost;
@@ -112,87 +103,84 @@ export default function App() {
   const roiColor = roi >= TARGET ? "#16A34A" : roi >= 6 ? "#D97706" : "#DC2626";
   const barPct = Math.min(Math.max((roi / 12) * 100, 0), 100);
 
-  const showToast = (msg, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
-  };
+  // Plusvalía
+  const appreciation = saleValue > 0 ? saleValue - purchasePrice : 0;
+  const appreciationPct = purchasePrice > 0 && saleValue > 0 ? (appreciation / purchasePrice) * 100 : 0;
+  const appreciationColor = appreciation >= 0 ? "#16A34A" : "#DC2626";
+
+  const showToast = (msg, ok = true) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
 
   const loadProperties = async () => {
     setLoading(true);
-    try {
-      const data = await supabase.fetchAll();
-      setSavedProps(data);
-    } catch (e) {
-      showToast("Error cargando propiedades", false);
-    }
+    try { setSavedProps(await supabase.fetchAll()); } catch { showToast("Error cargando propiedades", false); }
     setLoading(false);
   };
 
   useEffect(() => { loadProperties(); }, []);
 
+  const buildRecord = () => ({
+    prop_name: propName, condo, realtor_name: realtorName, realtor_phone: realtorPhone, realtor_email: realtorEmail,
+    purchase_price: purchasePrice, remodel_cost: remodelCost, hoa_monthly: hoaMonthly,
+    insurance_annual: insuranceAnnual, property_tax: propertyTax, rent_monthly: rentMonthly,
+    sale_value: saleValue || null, listing_url: listingUrl || null,
+    roi: parseFloat(roi.toFixed(2)), net_annual: netAnnual,
+  });
+
   const save = async () => {
     if (!propName) return showToast("Agrega el nombre de la propiedad.", false);
     setSaving(true);
     try {
-      await supabase.insert({
-        prop_name: propName,
-        condo,
-        realtor_name: realtorName,
-        realtor_phone: realtorPhone,
-        realtor_email: realtorEmail,
-        purchase_price: purchasePrice,
-        remodel_cost: remodelCost,
-        hoa_monthly: hoaMonthly,
-        insurance_annual: insuranceAnnual,
-        property_tax: propertyTax,
-        rent_monthly: rentMonthly,
-        roi: parseFloat(roi.toFixed(2)),
-        net_annual: netAnnual,
-      });
-      showToast("✅ Propiedad guardada en Supabase.");
+      if (editingId) {
+        await supabase.update(editingId, buildRecord());
+        showToast("✅ Propiedad actualizada.");
+        setEditingId(null);
+      } else {
+        await supabase.insert(buildRecord());
+        showToast("✅ Propiedad guardada en Supabase.");
+      }
+      setForm(emptyForm());
       await loadProperties();
-    } catch (e) {
-      showToast("Error guardando: " + e.message, false);
-    }
+    } catch (e) { showToast("Error: " + e.message, false); }
     setSaving(false);
   };
 
+  const startEdit = (p) => {
+    setForm({
+      purchasePrice: p.purchase_price, remodelCost: p.remodel_cost, hoaMonthly: p.hoa_monthly,
+      insuranceAnnual: p.insurance_annual, propertyTax: p.property_tax, rentMonthly: p.rent_monthly,
+      saleValue: p.sale_value || 0, listingUrl: p.listing_url || "",
+      propName: p.prop_name || "", condo: p.condo || "", realtorName: p.realtor_name || "",
+      realtorPhone: p.realtor_phone || "", realtorEmail: p.realtor_email || "",
+    });
+    setEditingId(p.id);
+    setTab("calc");
+    window.scrollTo(0, 0);
+  };
+
+  const cancelEdit = () => { setForm(emptyForm()); setEditingId(null); };
+
   const del = async (id) => {
-    try {
-      await supabase.remove(id);
-      setSavedProps((prev) => prev.filter((p) => p.id !== id));
-      showToast("🗑 Propiedad eliminada.");
-    } catch (e) {
-      showToast("Error eliminando", false);
-    }
+    try { await supabase.remove(id); setSavedProps(prev => prev.filter(p => p.id !== id)); showToast("🗑 Eliminada."); }
+    catch { showToast("Error eliminando", false); }
   };
 
   const exportCSV = () => {
     if (!savedProps.length) return showToast("No hay propiedades guardadas.", false);
-    const h = ["Nombre","Condominio","Realtor","Teléfono","Email","Precio Compra","Remodelación","HOA Mensual","Seguro Anual","Property Tax","Renta Mensual","ROI %","Neto Anual","Fecha"];
-    const rows = savedProps.map((p) => [p.prop_name,p.condo,p.realtor_name,p.realtor_phone,p.realtor_email,p.purchase_price,p.remodel_cost,p.hoa_monthly,p.insurance_annual,p.property_tax,p.rent_monthly,p.roi,p.net_annual,new Date(p.created_at).toLocaleDateString("es-PR")]);
-    const csv = [h,...rows].map((r) => r.map((v) => `"${v??""}"` ).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "propiedades_roi.csv"; a.click();
+    const h = ["Nombre","Condominio","Realtor","Teléfono","Email","Precio Compra","Remodelación","HOA Mensual","Seguro Anual","Property Tax","Renta Mensual","Valor de Venta","Link","ROI %","Neto Anual","Fecha"];
+    const rows = savedProps.map(p => [p.prop_name,p.condo,p.realtor_name,p.realtor_phone,p.realtor_email,p.purchase_price,p.remodel_cost,p.hoa_monthly,p.insurance_annual,p.property_tax,p.rent_monthly,p.sale_value,p.listing_url,p.roi,p.net_annual,new Date(p.created_at).toLocaleDateString("es-PR")]);
+    const csv = [h,...rows].map(r => r.map(v => `"${v??""}"` ).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "propiedades_roi.csv"; a.click();
   };
 
   const sliderStyle = `
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
-      background: white; border: 3px solid #3B82F6; box-shadow: 0 2px 6px rgba(59,130,246,0.4); cursor: pointer;
-    }
-    input[type=range]::-moz-range-thumb {
-      width: 22px; height: 22px; border-radius: 50%;
-      background: white; border: 3px solid #3B82F6; box-shadow: 0 2px 6px rgba(59,130,246,0.4); cursor: pointer;
-    }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: white; border: 3px solid #3B82F6; box-shadow: 0 2px 6px rgba(59,130,246,0.4); cursor: pointer; }
+    input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: white; border: 3px solid #3B82F6; box-shadow: 0 2px 6px rgba(59,130,246,0.4); cursor: pointer; }
   `;
 
   return (
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#F8F9FB", minHeight: "100vh", maxWidth: "430px", margin: "0 auto", paddingBottom: "80px" }}>
       <style>{sliderStyle}</style>
 
-      {/* Toast */}
       {toast && (
         <div style={{ position: "fixed", top: "16px", left: "50%", transform: "translateX(-50%)", background: toast.ok ? "#16A34A" : "#DC2626", color: "#fff", padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: "700", zIndex: 999, boxShadow: "0 4px 12px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>
           {toast.msg}
@@ -209,7 +197,7 @@ export default function App() {
 
       {/* Tabs */}
       <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #E5E7EB" }}>
-        {[["calc","📐 Calculadora"],["saved",`📁 Guardadas (${savedProps.length})`]].map(([k,l]) => (
+        {[["calc", editingId ? "✏️ Editando" : "📐 Calculadora"], ["saved", `📁 Guardadas (${savedProps.length})`]].map(([k,l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "13px", border: "none", background: "transparent",
             color: tab === k ? "#1D4ED8" : "#6B7280", fontWeight: tab === k ? "700" : "500",
@@ -221,6 +209,14 @@ export default function App() {
 
       {tab === "calc" && (
         <div style={{ padding: "16px" }}>
+
+          {editingId && (
+            <div style={{ background: "#FEF3C7", borderRadius: "12px", padding: "12px 16px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "#92400E" }}>✏️ Modo edición</span>
+              <button onClick={cancelEdit} style={{ background: "transparent", border: "1px solid #D97706", borderRadius: "8px", padding: "4px 10px", color: "#92400E", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            </div>
+          )}
+
           {/* ROI Card */}
           <div style={{ background: "#fff", borderRadius: "16px", padding: "20px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
@@ -251,16 +247,34 @@ export default function App() {
           {/* Sliders */}
           <div style={{ background: "#fff", borderRadius: "16px", padding: "18px 16px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>🏠 Ingresos</div>
-            <SliderField label="Renta Mensual" value={rentMonthly} onChange={setRentMonthly} min={500} max={8000} step={50} suffix="/mo" />
+            <SliderField label="Renta Mensual" value={rentMonthly} onChange={set("rentMonthly")} min={500} max={8000} step={50} suffix="/mo" />
 
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", margin: "16px 0 4px" }}>💰 Inversión Inicial</div>
-            <SliderField label="Precio de Compra" value={purchasePrice} onChange={setPurchasePrice} min={100000} max={1000000} step={5000} />
-            <SliderField label="Remodelación" value={remodelCost} onChange={setRemodelCost} min={0} max={150000} step={1000} />
+            <SliderField label="Precio de Compra" value={purchasePrice} onChange={set("purchasePrice")} min={100000} max={1000000} step={5000} />
+            <SliderField label="Remodelación" value={remodelCost} onChange={set("remodelCost")} min={0} max={150000} step={1000} />
 
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", margin: "16px 0 4px" }}>📋 Gastos</div>
-            <SliderField label="HOA Mensual" value={hoaMonthly} onChange={setHoaMonthly} min={0} max={1500} step={10} suffix="/mo" />
-            <SliderField label="Seguro Anual" value={insuranceAnnual} onChange={setInsuranceAnnual} min={0} max={10000} step={100} />
-            <SliderField label="Property Tax" value={propertyTax} onChange={setPropertyTax} min={0} max={15000} step={100} />
+            <SliderField label="HOA Mensual" value={hoaMonthly} onChange={set("hoaMonthly")} min={0} max={1500} step={10} suffix="/mo" />
+            <SliderField label="Seguro Anual" value={insuranceAnnual} onChange={set("insuranceAnnual")} min={0} max={10000} step={100} />
+            <SliderField label="Property Tax" value={propertyTax} onChange={set("propertyTax")} min={0} max={15000} step={100} />
+          </div>
+
+          {/* Plusvalía */}
+          <div style={{ background: "#fff", borderRadius: "16px", padding: "18px 16px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>📈 Plusvalía</div>
+            <SliderField label="Valor de Venta" value={saleValue} onChange={set("saleValue")} min={0} max={2000000} step={5000} />
+            {saleValue > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
+                <div style={{ background: appreciation >= 0 ? "#F0FDF4" : "#FEF2F2", borderRadius: "10px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "10px", color: appreciationColor, fontWeight: "700", marginBottom: "2px" }}>Ganancia / Pérdida</div>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: appreciationColor, fontFamily: "monospace" }}>{appreciation >= 0 ? "+" : ""}{fmt(appreciation)}</div>
+                </div>
+                <div style={{ background: appreciation >= 0 ? "#F0FDF4" : "#FEF2F2", borderRadius: "10px", padding: "10px 12px" }}>
+                  <div style={{ fontSize: "10px", color: appreciationColor, fontWeight: "700", marginBottom: "2px" }}>% sobre compra</div>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: appreciationColor, fontFamily: "monospace" }}>{appreciation >= 0 ? "+" : ""}{fmtPct(appreciationPct)}</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Resumen */}
@@ -272,6 +286,7 @@ export default function App() {
               ["Gastos Anuales", fmt(annualExpenses), "#DC2626"],
               ["Neto Anual", fmt(netAnnual), netAnnual >= 0 ? "#16A34A" : "#DC2626"],
               ["ROI Anual", fmtPct(roi), roiColor],
+              ...(saleValue > 0 ? [["Plusvalía", (appreciation >= 0 ? "+" : "") + fmt(appreciation) + " (" + fmtPct(appreciationPct) + ")", appreciationColor]] : []),
             ].map(([l,v,c]) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #F3F4F6" }}>
                 <span style={{ fontSize: "13px", color: "#6B7280" }}>{l}</span>
@@ -283,19 +298,20 @@ export default function App() {
           {/* Property Info */}
           <div style={{ background: "#fff", borderRadius: "16px", padding: "16px", marginBottom: "14px", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "6px" }}>📌 Datos de la Propiedad</div>
-            <TextField label="Nombre" value={propName} onChange={setPropName} placeholder="Ej. Apt 3B Condado" />
-            <TextField label="Condominio" value={condo} onChange={setCondo} placeholder="Nombre del complejo" />
+            <TextField label="Nombre" value={propName} onChange={set("propName")} placeholder="Ej. Apt 3B Condado" />
+            <TextField label="Condominio" value={condo} onChange={set("condo")} placeholder="Nombre del complejo" />
+            <TextField label="Link anuncio" value={listingUrl} onChange={set("listingUrl")} placeholder="https://..." />
             <div style={{ fontSize: "11px", fontWeight: "800", color: "#3B82F6", letterSpacing: "0.12em", textTransform: "uppercase", margin: "14px 0 6px" }}>👤 Realtor</div>
-            <TextField label="Nombre" value={realtorName} onChange={setRealtorName} placeholder="Nombre completo" />
-            <TextField label="Teléfono" value={realtorPhone} onChange={setRealtorPhone} placeholder="787-000-0000" />
-            <TextField label="Email" value={realtorEmail} onChange={setRealtorEmail} placeholder="email@ejemplo.com" />
+            <TextField label="Nombre" value={realtorName} onChange={set("realtorName")} placeholder="Nombre completo" />
+            <TextField label="Teléfono" value={realtorPhone} onChange={set("realtorPhone")} placeholder="787-000-0000" />
+            <TextField label="Email" value={realtorEmail} onChange={set("realtorEmail")} placeholder="email@ejemplo.com" />
           </div>
 
           <button onClick={save} disabled={saving} style={{
-            width: "100%", padding: "16px", background: saving ? "#93C5FD" : "#1D4ED8", border: "none",
+            width: "100%", padding: "16px", background: saving ? "#93C5FD" : editingId ? "#D97706" : "#1D4ED8", border: "none",
             borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: "700",
             cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit",
-          }}>{saving ? "⏳ Guardando..." : "💾 Guardar en Supabase"}</button>
+          }}>{saving ? "⏳ Guardando..." : editingId ? "✏️ Actualizar Propiedad" : "💾 Guardar en Supabase"}</button>
         </div>
       )}
 
@@ -313,13 +329,12 @@ export default function App() {
             </div>
           ) : (
             <>
-              <button onClick={exportCSV} style={{
-                width: "100%", padding: "13px", background: "#fff", border: "1.5px solid #3B82F6",
-                borderRadius: "12px", color: "#1D4ED8", fontSize: "13px", fontWeight: "700",
-                cursor: "pointer", fontFamily: "inherit", marginBottom: "14px",
-              }}>📊 Exportar CSV para Google Sheets</button>
+              <button onClick={exportCSV} style={{ width: "100%", padding: "13px", background: "#fff", border: "1.5px solid #3B82F6", borderRadius: "12px", color: "#1D4ED8", fontSize: "13px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", marginBottom: "14px" }}>
+                📊 Exportar CSV para Google Sheets
+              </button>
               {savedProps.map((p) => {
                 const c = Number(p.roi) >= TARGET ? "#16A34A" : Number(p.roi) >= 6 ? "#D97706" : "#DC2626";
+                const appr = p.sale_value && p.purchase_price ? p.sale_value - p.purchase_price : null;
                 return (
                   <div key={p.id} style={{ background: "#fff", borderRadius: "14px", padding: "16px", marginBottom: "12px", boxShadow: "0 1px 6px rgba(0,0,0,0.07)", borderLeft: `4px solid ${c}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -328,6 +343,7 @@ export default function App() {
                         {p.condo && <div style={{ fontSize: "12px", color: "#6B7280", marginTop: "2px" }}>{p.condo}</div>}
                         {p.realtor_name && <div style={{ fontSize: "12px", color: "#6B7280" }}>👤 {p.realtor_name}</div>}
                         {p.realtor_phone && <div style={{ fontSize: "12px", color: "#6B7280" }}>📞 {p.realtor_phone}</div>}
+                        {p.listing_url && <a href={p.listing_url} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "#3B82F6" }}>🔗 Ver anuncio</a>}
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: "26px", fontWeight: "700", color: c, fontFamily: "monospace" }}>{p.roi}%</div>
@@ -335,17 +351,22 @@ export default function App() {
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "12px" }}>
-                      {[["Compra", fmt(p.purchase_price)],["Renta", fmt(p.rent_monthly)+"/mo"],["Neto", fmt(p.net_annual)+"/yr"]].map(([l,v]) => (
+                      {[
+                        ["Compra", fmt(p.purchase_price)],
+                        ["Renta", fmt(p.rent_monthly)+"/mo"],
+                        ["Neto", fmt(p.net_annual)+"/yr"],
+                        ...(p.sale_value ? [["Venta", fmt(p.sale_value)], ["Plusvalía", (appr >= 0 ? "+" : "") + fmt(appr)]] : []),
+                      ].map(([l,v]) => (
                         <div key={l} style={{ background: "#F8F9FB", borderRadius: "8px", padding: "8px" }}>
                           <div style={{ fontSize: "9px", color: "#9CA3AF", textTransform: "uppercase", fontWeight: "700" }}>{l}</div>
                           <div style={{ fontSize: "12px", fontWeight: "700", fontFamily: "monospace", color: "#1A1A2E" }}>{v}</div>
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => del(p.id)} style={{
-                      marginTop: "10px", padding: "6px 14px", background: "transparent", border: "1px solid #FCA5A5",
-                      borderRadius: "8px", color: "#DC2626", fontSize: "12px", cursor: "pointer", fontFamily: "inherit",
-                    }}>🗑 Eliminar</button>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                      <button onClick={() => startEdit(p)} style={{ flex: 1, padding: "7px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px", color: "#1D4ED8", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", fontWeight: "700" }}>✏️ Editar</button>
+                      <button onClick={() => del(p.id)} style={{ flex: 1, padding: "7px", background: "transparent", border: "1px solid #FCA5A5", borderRadius: "8px", color: "#DC2626", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" }}>🗑 Eliminar</button>
+                    </div>
                   </div>
                 );
               })}
